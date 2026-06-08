@@ -4,20 +4,12 @@
 #define true 1
 #define false 0
 
-#define QEMU_FWCFG_BASE        ((volatile uint8_t*)0x09020000)
-#define QEMU_FWCFG_DATA        ((volatile uint64_t*)(QEMU_FWCFG_BASE + 0))
-#define QEMU_FWCFG_SELECTOR    ((volatile uint16_t*)(QEMU_FWCFG_BASE + 8))
-#define QEMU_FWCFG_DMA         ((volatile uint64_t*)(QEMU_FWCFG_BASE + 16))
+#define fw_cfg_address ((volatile uint8_t*)0x09020000)
+#define selector_register ((volatile uint16_t*)(fw_cfg_address + 8))
+#define data_register ((volatile uint64_t*)(fw_cfg_address + 0))
+#define dma_address ((volatile uint64_t*)(fw_cfg_address + 16))
 
-#define FWCFG_DMA_FLAG_ERROR   0x01
-#define FWCFG_DMA_FLAG_READ    0x02
-#define FWCFG_DMA_FLAG_SKIP    0x04
-#define FWCFG_DMA_FLAG_SELECT  0x08
-#define FWCFG_DMA_FLAG_WRITE   0x10
-
-#define FWCFG_FILE_DIR_SELECTOR 0x19
-
-struct FWCfgDmaAccess {
+struct QemuCfgDmaAccess {
     uint32_t control;
     uint32_t length;
     uint64_t address;
@@ -30,69 +22,70 @@ struct FWCfgFile {
     char name[56];
 } __attribute__((packed));
 
-struct FWCfgFileDir {
+struct FWCfgFiles {
     uint32_t count;
     struct FWCfgFile files[];
 } __attribute__((packed));
 
-uint64_t kstrlen(const char* str) {
+uint64_t strlen(const char* str) {
     uint64_t i = 0;
     while (*str++ != '\0') i++;
     return i;
 }
 
-bool kmemeq(const char* a, const char* b, uint64_t length) {
+bool memeq(const char* b1, const char* b2, uint64_t length) {
     for (uint64_t i = 0; i < length; i++) {
-        if (*a++ != *b++) return false;
+        if (*b1++ != *b2++) return false;
     }
+
     return true;
 }
 
-void fwcfg_select(uint16_t selector) {
-    *QEMU_FWCFG_SELECTOR = SWAP16(selector);
+void fw_cfg_write_selector(uint16_t selector) {
+    *selector_register = BE16(selector);
 }
 
-uint64_t fwcfg_read(void) {
-    return *QEMU_FWCFG_DATA;
+uint64_t fw_cfg_read_data() {
+    return *data_register;
 }
 
-void fwcfg_dma_transfer(volatile void* buf, uint32_t length, uint32_t control) {
-    volatile struct FWCfgDmaAccess dma;
-    dma.control = SWAP32(control);
-    dma.address = SWAP64((uint64_t)buf);
-    dma.length  = SWAP32(length);
+void fw_cfg_dma_transfer(volatile void* address, uint32_t length, uint32_t control) {
+    volatile struct QemuCfgDmaAccess dma;
+    dma.control = BE32(control);
+    dma.address = BE64((uint64_t)address);
+    dma.length = BE32(length);
 
-    *QEMU_FWCFG_DMA = SWAP64((uint64_t)&dma);
-    while (SWAP32(dma.control) & ~FWCFG_DMA_FLAG_ERROR);
+    *dma_address = BE64((uint64_t)&dma);
+    while (BE32(dma.control) & ~0x01);
 }
 
-void fwcfg_dma_read(volatile void* buf, int selector, int length) {
-    uint32_t control = (selector << 16) | FWCFG_DMA_FLAG_SELECT | FWCFG_DMA_FLAG_READ;
-    fwcfg_dma_transfer(buf, length, control);
+void fw_cfg_dma_read(volatile void* buf, int e, int length) {
+    uint32_t control = (e << 16) | 0x08 | 0x02;
+    fw_cfg_dma_transfer(buf, length, control);
 }
 
-void fwcfg_dma_write(void* buf, int selector, int length) {
-    uint32_t control = (selector << 16) | FWCFG_DMA_FLAG_SELECT | FWCFG_DMA_FLAG_WRITE;
-    fwcfg_dma_transfer(buf, length, control);
+void fw_cfg_dma_write(void* buf, int e, int length) {
+    uint32_t control = (e << 16) | 0x08 | 0x10;
+    fw_cfg_dma_transfer(buf, length, control);
 }
 
-bool fwcfg_find_file(struct FWCfgFile* out, const char* name) {
-    uint64_t name_len = kstrlen(name);
+bool fw_cfg_find_file(struct FWCfgFile* out, const char* name) {
+    uint64_t name_size = strlen(name);
+    volatile uint32_t files_count = 0;
+    fw_cfg_dma_read(&files_count, 0x19, sizeof(files_count));
+    files_count = BE32(files_count);
 
-    volatile uint32_t file_count = 0;
-    fwcfg_dma_read(&file_count, FWCFG_FILE_DIR_SELECTOR, sizeof(file_count));
-    file_count = SWAP32(file_count);
+    uint64_t directory_size = sizeof(struct FWCfgFiles) + (sizeof(struct FWCfgFile) * files_count);
+    struct FWCfgFiles* directory = __builtin_alloca(directory_size);
+    fw_cfg_dma_read(directory, 0x19, directory_size);
 
-    uint64_t dir_size = sizeof(struct FWCfgFileDir) + (sizeof(struct FWCfgFile) * file_count);
-    struct FWCfgFileDir* dir = __builtin_alloca(dir_size);
-    fwcfg_dma_read(dir, FWCFG_FILE_DIR_SELECTOR, dir_size);
-
-    for (int i = 0; i < file_count; i++) {
-        struct FWCfgFile* file = &dir->files[i];
-        if (kmemeq(name, file->name, name_len)) {
-            file->size   = SWAP32(file->size);
-            file->select = SWAP16(file->select);
+    for (int i = 0; i < files_count; i++) {
+        struct FWCfgFile* file = &directory->files[i];
+        if (memeq(name, file->name, name_size) == true) {
+            file->size = BE32(file->size);
+            file->select = BE16(file->select);
             *out = *file;
+
             return true;
         }
     }
@@ -100,17 +93,22 @@ bool fwcfg_find_file(struct FWCfgFile* out, const char* name) {
     return false;
 }
 
-void qemu_ramfb_configure(struct QemuRamFBCfg* cfg) {
+extern void qemu_ramfb_configure(struct QemuRamFBCfg* cfg) {
     struct FWCfgFile ramfb_file;
-    fwcfg_find_file(&ramfb_file, "etc/ramfb");
-    fwcfg_dma_write(cfg, ramfb_file.select, sizeof(struct QemuRamFBCfg));
+    fw_cfg_find_file(&ramfb_file, "etc/ramfb");
+
+    fw_cfg_dma_write(cfg, ramfb_file.select, sizeof(struct QemuRamFBCfg));
 }
 
-void qemu_ramfb_make_cfg(struct QemuRamFBCfg* cfg, void* fb_address, uint32_t fb_width, uint32_t fb_height) {
-    cfg->address = SWAP64((uint64_t)fb_address);
-    cfg->fourcc  = SWAP32(PIXEL_FORMAT_XRGB8888);
-    cfg->width   = SWAP32(fb_width);
-    cfg->height  = SWAP32(fb_height);
-    cfg->flags   = SWAP32(0);
-    cfg->stride  = SWAP32(fb_width * sizeof(uint32_t));
+extern void qemu_ramfb_make_cfg(struct QemuRamFBCfg* cfg, void* fb_address, uint32_t fb_width, uint32_t fb_height) {
+    cfg->address = BE64((uint64_t)fb_address);
+    cfg->fourcc = BE32(FORMAT_XRGB8888);
+    cfg->width = BE32(fb_width);
+    cfg->height = BE32(fb_height);
+    cfg->flags = BE32(0);
+    cfg->stride = BE32(fb_width * sizeof(uint32_t));
+}
+
+extern void set_pixel(uint32_t* fb, uint32_t x, uint32_t y, uint32_t width, uint32_t color) {
+    fb[y * width + x] = color;
 }
