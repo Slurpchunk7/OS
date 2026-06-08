@@ -10,7 +10,9 @@ void uart_putc(char c);
 
 void uart_puts(const char* s);
 
-void print(const char* text);
+void print_int(int value);
+
+void print(const char* fmt, ...);
 
 void print_hex(uint64_t hex);
 
