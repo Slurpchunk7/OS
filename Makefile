@@ -3,31 +3,41 @@ CXX     = aarch64-none-elf-g++
 AS      = aarch64-none-elf-as
 LD      = aarch64-none-elf-ld
 
-CFLAGS  = -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a
-CXXFLAGS= -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a
-ASFLAGS = -mcpu=cortex-a72 -march=armv8-a
+CFLAGS   = -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a
+CXXFLAGS = -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a
+ASFLAGS  = -mcpu=cortex-a72 -march=armv8-a
 
 LDFLAGS = -T linker.ld
 
-ASM     = src/_start.asm
-C_SRC   = src/main.cpp src/ramfb.c
+TARGET = kernel.elf
 
-OBJ     = _start.o main.o ramfb.o
-TARGET  = kernel.elf
+ASM = src/_start.asm
+
+C_FILES   := $(wildcard src/*.c)
+CPP_FILES := $(wildcard src/*.cpp)
+
+C_OBJS   := $(patsubst src/%.c,build/%.o,$(C_FILES))
+CPP_OBJS := $(patsubst src/%.cpp,build/%.o,$(CPP_FILES))
+ASM_OBJ  := build/_start.o
+
+OBJ := $(ASM_OBJ) $(C_OBJS) $(CPP_OBJS)
 
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(LD) $(LDFLAGS) $(OBJ) -o $(TARGET)
+	$(LD) $(LDFLAGS) $(OBJ) -o $@
 
-_start.o: $(ASM)
-	$(AS) $(ASFLAGS) $(ASM) -o _start.o
+build:
+	mkdir -p build
 
-main.o: src/main.cpp
-	$(CXX) $(CXXFLAGS) -c src/main.cpp -o main.o
+$(ASM_OBJ): $(ASM) | build
+	$(AS) $(ASFLAGS) $< -o $@
 
-ramfb.o: src/ramfb.c
-	$(CC) $(CFLAGS) -c src/ramfb.c -o ramfb.o
+build/%.o: src/%.c | build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/%.o: src/%.cpp | build
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: $(TARGET)
 	qemu-system-aarch64 \
@@ -36,7 +46,11 @@ run: $(TARGET)
 		-cpu cortex-a72 \
 		-vga none \
 		-device ramfb \
-		-kernel $(TARGET)
+		-kernel $(TARGET) \
+		-device virtio-keyboard-pci \
+		-serial stdio\
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -rf build $(TARGET)
+
+.PHONY: all run clean
