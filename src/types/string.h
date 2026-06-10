@@ -36,6 +36,13 @@ public:
     }
 };
 
+const char* char_to_str(char c) {
+    static char buf[2];
+    buf[0] = c;
+    buf[1] = '\0';
+    return buf; 
+} 
+
 #ifdef __cplusplus
 }
 #endif

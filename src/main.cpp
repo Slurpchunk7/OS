@@ -19,13 +19,6 @@
 
 #define fb_loc 0x40002800
 
-const char* char_to_str(char c) {
-    static char buf[2];
-    buf[0] = c;
-    buf[1] = '\0';
-    return buf; 
-} 
-
 void flush(uint32_t* dst, uint32_t* src, int count) {
     int i = 0;
     for (; i <= count - 4; i += 4) {
