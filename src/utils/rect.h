@@ -6,7 +6,7 @@
 typedef struct { int x, y, w, h; } rect_t;
 
 static inline void flush_rect(uint32_t* dst, uint32_t* src, rect_t r) {
-    for (int y = r.y; y < r.y; y++) {
+    for (int y = r.y; y < r.y + r.h; y++) {
         int off = y * WIDTH + r.x;
         for (int x = 0; x < r.w; x++) {
             dst[off + x] = src[off + x];

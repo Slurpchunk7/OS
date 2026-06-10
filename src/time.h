@@ -23,6 +23,19 @@ uint32_t rtc_time_tz(int timezone_hours)
     return (uint32_t)t;
 }
 
+void get_time(uint32_t* h, uint32_t* m, uint32_t* s)
+{
+    uint32_t t = rtc_time();
+
+    *s = t % 60;
+    t /= 60;
+
+    *m = t % 60;
+    t /= 60;
+
+    *h = t % 24;
+}
+
 #ifdef __cplusplus
 }
 #endif

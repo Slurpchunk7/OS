@@ -10,6 +10,7 @@
 #include "utils/rect.h"
 #include "memory/page_alloc.h"
 #include "memory/heap.h"
+#include "fs/fat32.h"
 
 #include "bmp/cursor.h"
 
@@ -60,15 +61,30 @@ extern "C" void start() {
     // init blk
     virtio_blk_init(0, 4, 0);
 
-    uint8_t sector[512];
-    if (virtio_blk_read(0, 1, sector)) {
-        print("sector 0: ");
-        for (int i = 0; i < 16; i++) {print_hex(sector[i]); uart_putc('\n'); }
-        uart_putc('\n');
+    // init drive
+    fat32_init();
 
-        if (sector[512] == 0x55 && sector[511] == 0xAA) {
-            print("valid boot sector");
-        }
+    // list root dir
+    fat_entry_t entries[32];
+    int count = 0;
+    fat32_list("/", entries, 32, &count);
+    print("Root dir: \n");
+    for (int i = 0; i < count; i++) {
+        print(entries[i].is_dir ? " [DIR] " : " [FILE] ");
+        print(entries[i].name);
+        uart_putc('\n');
+    }
+
+    // read file
+    fat_entry_t f;
+    if (fat32_open("/hello.txt", &f)) {
+        char* data = (char*)kmalloc(f.size + 1);
+        fat32_read(&f, data);
+        data[f.size] = '\0';
+        print("hello.txt: ");
+        print(data);
+        uart_putc('\n');
+        kfree(data);
     }
 
     char last = '?';

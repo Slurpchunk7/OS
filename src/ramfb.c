@@ -42,7 +42,7 @@ bool memeq(const char* b1, const char* b2, uint64_t length) {
 }
 
 void fw_cfg_write_selector(uint16_t selector) {
-    *selector_register = BE16(selector);
+    *selector_register = SWAP16(selector);
 }
 
 uint64_t fw_cfg_read_data() {
@@ -51,12 +51,12 @@ uint64_t fw_cfg_read_data() {
 
 void fw_cfg_dma_transfer(volatile void* address, uint32_t length, uint32_t control) {
     volatile struct QemuCfgDmaAccess dma;
-    dma.control = BE32(control);
-    dma.address = BE64((uint64_t)address);
-    dma.length = BE32(length);
+    dma.control = SWAP32(control);
+    dma.address = SWAP64((uint64_t)address);
+    dma.length = SWAP32(length);
 
-    *dma_address = BE64((uint64_t)&dma);
-    while (BE32(dma.control) & ~0x01);
+    *dma_address = SWAP64((uint64_t)&dma);
+    while (SWAP32(dma.control) & ~0x01);
 }
 
 void fw_cfg_dma_read(volatile void* buf, int e, int length) {
@@ -73,7 +73,7 @@ bool fw_cfg_find_file(struct FWCfgFile* out, const char* name) {
     uint64_t name_size = strlen(name);
     volatile uint32_t files_count = 0;
     fw_cfg_dma_read(&files_count, 0x19, sizeof(files_count));
-    files_count = BE32(files_count);
+    files_count = SWAP32(files_count);
 
     uint64_t directory_size = sizeof(struct FWCfgFiles) + (sizeof(struct FWCfgFile) * files_count);
     struct FWCfgFiles* directory = __builtin_alloca(directory_size);
@@ -82,8 +82,8 @@ bool fw_cfg_find_file(struct FWCfgFile* out, const char* name) {
     for (int i = 0; i < files_count; i++) {
         struct FWCfgFile* file = &directory->files[i];
         if (memeq(name, file->name, name_size) == true) {
-            file->size = BE32(file->size);
-            file->select = BE16(file->select);
+            file->size = SWAP32(file->size);
+            file->select = SWAP16(file->select);
             *out = *file;
 
             return true;
@@ -101,12 +101,12 @@ extern void qemu_ramfb_configure(struct QemuRamFBCfg* cfg) {
 }
 
 extern void qemu_ramfb_make_cfg(struct QemuRamFBCfg* cfg, void* fb_address, uint32_t fb_width, uint32_t fb_height) {
-    cfg->address = BE64((uint64_t)fb_address);
-    cfg->fourcc = BE32(FORMAT_XRGB8888);
-    cfg->width = BE32(fb_width);
-    cfg->height = BE32(fb_height);
-    cfg->flags = BE32(0);
-    cfg->stride = BE32(fb_width * sizeof(uint32_t));
+    cfg->address = SWAP64((uint64_t)fb_address);
+    cfg->fourcc = SWAP32(PIXEL_FORMAT_XRGB8888);
+    cfg->width = SWAP32(fb_width);
+    cfg->height = SWAP32(fb_height);
+    cfg->flags = SWAP32(0);
+    cfg->stride = SWAP32(fb_width * sizeof(uint32_t));
 }
 
 extern void set_pixel(uint32_t* fb, uint32_t x, uint32_t y, uint32_t width, uint32_t color) {
