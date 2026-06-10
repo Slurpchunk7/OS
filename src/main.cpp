@@ -5,6 +5,7 @@
 #include "print.h"
 #include "time.h"
 #include "virtio_input.h"
+#include "virtio_blk.h"
 #include "utils/keyboard.h"
 #include "utils/rect.h"
 #include "memory/page_alloc.h"
@@ -62,6 +63,20 @@ extern "C" void start() {
     virtio_input_init(0, 3, 0, 1);
     int32_t mouse_x = 0;
     int32_t mouse_y = 0;
+
+    // init blk
+    virtio_blk_init(0, 4, 0);
+
+    uint8_t sector[512];
+    if (virtio_blk_read(0, 1, sector)) {
+        print("sector 0: ");
+        for (int i = 0; i < 16; i++) {print_hex(sector[i]); uart_putc('\n'); }
+        uart_putc('\n');
+
+        if (sector[512] == 0x55 && sector[511] == 0xAA) {
+            print("valid boot sector");
+        }
+    }
 
     char last = '?';
 

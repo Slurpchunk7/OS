@@ -4,7 +4,7 @@ AS      = aarch64-none-elf-as
 LD      = aarch64-none-elf-ld
 
 CFLAGS   = -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a
-CXXFLAGS = -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a
+CXXFLAGS = -O1 -ffreestanding -nostdlib -mcpu=cortex-a72 -march=armv8-a -fno-exceptions -fno-rtti
 ASFLAGS  = -mcpu=cortex-a72 -march=armv8-a
 
 LDFLAGS = -T linker.ld
@@ -13,8 +13,8 @@ TARGET = kernel.elf
 
 ASM = src/_start.asm
 
-C_FILES   := $(wildcard src/*.c)
-CPP_FILES := $(wildcard src/*.cpp)
+C_FILES   := $(shell find src -type f -name "*.c")
+CPP_FILES := $(shell find src -type f -name "*.cpp")
 
 C_OBJS   := $(patsubst src/%.c,build/%.o,$(C_FILES))
 CPP_OBJS := $(patsubst src/%.cpp,build/%.o,$(CPP_FILES))
@@ -27,16 +27,16 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(LD) $(LDFLAGS) $(OBJ) -o $@
 
-build:
-	mkdir -p build
-
-$(ASM_OBJ): $(ASM) | build
+$(ASM_OBJ): $(ASM)
+	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/%.o: src/%.c | build
+build/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/%.o: src/%.cpp | build
+build/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: $(TARGET)
@@ -49,7 +49,9 @@ run: $(TARGET)
 		-kernel $(TARGET) \
 		-device virtio-keyboard-pci \
 		-serial stdio \
-		-device virtio-mouse-pci
+		-device virtio-mouse-pci \
+		-drive id=hd0,file=disk.img,format=raw,if=none \
+		-device virtio-blk-pci,drive=hd0
 
 clean:
 	rm -rf build $(TARGET)
