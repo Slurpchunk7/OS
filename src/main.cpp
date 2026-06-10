@@ -7,6 +7,8 @@
 #include "virtio_input.h"
 #include "utils/keyboard.h"
 #include "utils/rect.h"
+#include "memory/page_alloc.h"
+#include "memory/heap.h"
 
 #include "bmp/cursor.h"
 
@@ -36,6 +38,9 @@ extern "C" void start() {
     print("scanning\n");
     pci_scan();
     print("done\n");
+
+    page_alloc_init();
+    heap_init();
     
     QemuRamFBCfg ramfb_cfg = {
         .address = SWAP64(fb_loc),
@@ -85,13 +90,6 @@ extern "C" void start() {
         if (mouse_x >= WIDTH) mouse_x = WIDTH - 1;
         if (mouse_y < 0) mouse_y = 0;
         if (mouse_y >= HEIGHT) mouse_y = HEIGHT - 1;
-
-        print("MOUSE X: ");
-        print_int(mouse_x);
-        uart_putc('\n');
-        print("MOUSE Y: ");
-        print_int(mouse_y);
-        uart_putc('\n');
 
         // cursor
         for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = 0;
