@@ -4,78 +4,64 @@
 #include "pci.h"
 #include "print.h"
 #include "time.h"
-
+#include "virtio_input.h"
+#include "utils/keyboard.h"
 #include <stdint.h>
 
 #define fb_loc 0x40002800
 
-void uart_print_dec(uint32_t value)
-{
-    char buf[11];
-    int i = 0;
-
-    if (value == 0)
-    {
-        uart_putc('0');
-        return;
-    }
-
-    while (value > 0)
-    {
-        buf[i++] = '0' + (value % 10);
-        value /= 10;
-    }
-
-    while (i--)
-    {
-        uart_putc(buf[i]);
-    }
-}
-
-void get_time(uint32_t t, uint32_t* h, uint32_t* m, uint32_t* s)
-{
-    *s = t % 60;
-    t /= 60;
-
-    *m = t % 60;
-    t /= 60;
-
-    *h = t % 24;
-}
+const char* char_to_str(char c) {
+    static char buf[2];
+    buf[0] = c;
+    buf[1] = '\0';
+    return buf; 
+} 
 
 extern "C" void start() {
     print("scanning\n");
-
     pci_scan();
-
     print("done\n");
     
     QemuRamFBCfg ramfb_cfg = {
-        .address = BE64(fb_loc),
-        .fourcc = BE32(FORMAT_XRGB8888),
-        .flags = BE32(0),
-        .width = BE32(WIDTH),
-        .height = BE32(HEIGHT),
-        .stride = BE32(4 * WIDTH)
+        .address = SWAP64(fb_loc),
+        .fourcc = SWAP32(PIXEL_FORMAT_XRGB8888),
+        .flags = SWAP32(0),
+        .width = SWAP32(WIDTH),
+        .height = SWAP32(HEIGHT),
+        .stride = SWAP32(4 * WIDTH)
     };
     
     qemu_ramfb_configure(&ramfb_cfg);
 
     uint32_t* fb = (uint32_t*)fb_loc;
+    static uint32_t backbuffer[WIDTH * HEIGHT];
+
+    virtio_input_init(0, 2, 0);
+    char last = '?';
 
     while (1)
     {
-        for (int i = 0; i < WIDTH * HEIGHT; i++)
-            fb[i] = 0xFF000000;
+        virtio_input_event_t ev;
+        if (virtio_input_poll(&ev)){
+            if (ev.type == EV_KEY && ev.value == 1) {
+                print("key: %d\n", ev.code);
+                last = keycode_to_ascii(ev.code);
+                uart_putc(keycode_to_ascii(ev.code));
+                uart_putc('\n');
+            }
+        }
         
-        uint32_t time = rtc_time_tz(10);
         uint32_t h, m, s;
-        get_time(time, &h, &m, &s);
-        print("Time: %d:%d:%d", h, m, s);
-        uart_putc('\n');
-        
-        draw_text(fb, "hi", 100, 100, 0xFFFFFFFF, 2);
+        get_time(&h, &m, &s);
 
-        for (volatile int i = 0; i < 1000000; i++);
+        static int frame = 0;
+        frame++;
+
+        uint32_t color = (frame % 2 == 0) ? 0xFF0000 : 0x0000FF;
+        for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = color;
+
+        for (int i = 0; i < WIDTH * HEIGHT; i++) fb[i] = backbuffer[i];
+        
+        for (volatile int i = 0; i < 1000000; i++); 
     }
 }
