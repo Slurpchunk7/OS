@@ -124,3 +124,26 @@ void print_hex(uint64_t value)
             uart_putc(hex[nibble]);
     }
 }
+
+void print_dec(uint32_t value) // decimal
+{
+    char buf[11];
+    int i = 0;
+
+    if (value == 0)
+    {
+        uart_putc('0');
+        return;
+    }
+
+    while (value > 0)
+    {
+        buf[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    while (i--)
+    {
+        uart_putc(buf[i]);
+    }
+}

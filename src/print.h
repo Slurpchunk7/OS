@@ -16,6 +16,8 @@ void print(const char* fmt, ...);
 
 void print_hex(uint64_t hex);
 
+void print_dec(uint32_t value);
+
 #ifdef __cplusplus
 }
 #endif
