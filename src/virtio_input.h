@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#define MAX_VIRTIO_INPUT_DEVICES 8
+
 #define VIRTIO_PCI_CAP_COMMON_CFG   1
 #define VIRTIO_PCI_CAP_NOTIFY_CFG   2
 #define VIRTIO_PCI_CAP_ISR_CFG      3
@@ -50,9 +52,17 @@ typedef struct {
     uint32_t value;
 } __attribute__((packed)) virtio_input_event_t;
 
-bool virtio_input_init(uint8_t bus, uint8_t dev, uint8_t func);
+bool virtio_input_init(
+    uint8_t bus,
+    uint8_t dev,
+    uint8_t func,
+    int device_idx
+);
 
-bool virtio_input_poll(virtio_input_event_t *out);
+bool virtio_input_poll(
+    virtio_input_event_t *out,
+    int device_idx
+);
 
 #ifdef __cplusplus
 }

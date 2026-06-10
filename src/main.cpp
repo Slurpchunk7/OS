@@ -6,7 +6,11 @@
 #include "time.h"
 #include "virtio_input.h"
 #include "utils/keyboard.h"
+#include "utils/rect.h"
+
 #include <stdint.h>
+
+#include <arm_neon.h>
 
 #define fb_loc 0x40002800
 
@@ -16,6 +20,15 @@ const char* char_to_str(char c) {
     buf[1] = '\0';
     return buf; 
 } 
+
+void flush(uint32_t* dst, uint32_t* src, int count) {
+    int i = 0;
+    for (; i <= count - 4; i += 4) {
+        uint32x4_t v = vld1q_u32(src + i);
+        vst1q_u32(dst + i, v);
+    }
+    for (; i < count; i++) dst[i] = src[i];
+}
 
 extern "C" void start() {
     print("scanning\n");
@@ -36,13 +49,20 @@ extern "C" void start() {
     uint32_t* fb = (uint32_t*)fb_loc;
     static uint32_t backbuffer[WIDTH * HEIGHT];
 
-    virtio_input_init(0, 2, 0);
+    // keyboard
+    virtio_input_init(0, 2, 0, 0);
+    // mouse
+    virtio_input_init(0, 3, 0, 1);
+    int32_t mouse_x = 0;
+    int32_t mouse_y = 0;
+
     char last = '?';
 
     while (1)
     {
+        // keyboard
         virtio_input_event_t ev;
-        if (virtio_input_poll(&ev)){
+        if (virtio_input_poll(&ev, 0)){
             if (ev.type == EV_KEY && ev.value == 1) {
                 print("key: %d\n", ev.code);
                 last = keycode_to_ascii(ev.code);
@@ -50,18 +70,33 @@ extern "C" void start() {
                 uart_putc('\n');
             }
         }
+
+        // mouse
+        if (virtio_input_poll(&ev, 1)) {
+            if (ev.type == EV_REL) {
+                if (ev.code == 0) mouse_x += (int32_t)ev.value;
+                if (ev.code == 1) mouse_y += (int32_t)ev.value;
+            }
+        }
         
-        uint32_t h, m, s;
-        get_time(&h, &m, &s);
+        if (mouse_x < 0) mouse_x = 0;
+        if (mouse_x >= WIDTH) mouse_x = WIDTH - 1;
+        if (mouse_y < 0) mouse_y = 0;
+        if (mouse_y >= HEIGHT) mouse_y = HEIGHT - 1;
 
-        static int frame = 0;
-        frame++;
+        print("MOUSE X: ");
+        print_int(mouse_x);
+        uart_putc('\n');
+        print("MOUSE Y: ");
+        print_int(mouse_y);
+        uart_putc('\n');
 
-        uint32_t color = (frame % 2 == 0) ? 0xFF0000 : 0x0000FF;
-        for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = color;
-
-        for (int i = 0; i < WIDTH * HEIGHT; i++) fb[i] = backbuffer[i];
-        
-        for (volatile int i = 0; i < 1000000; i++); 
+        // cursor
+        for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = 0;
+        rect_t cursor = {mouse_x, mouse_y, 4, 4};
+        draw_rect(backbuffer, cursor, 0xFFFFFFFF);
+        flush(fb, backbuffer, WIDTH*HEIGHT);
+ 
+        // for (volatile int i = 0; i < 1000000; i++); 
     }
 }

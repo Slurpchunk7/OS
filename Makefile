@@ -48,7 +48,8 @@ run: $(TARGET)
 		-device ramfb \
 		-kernel $(TARGET) \
 		-device virtio-keyboard-pci \
-		-serial stdio\
+		-serial stdio \
+		-device virtio-mouse-pci
 
 clean:
 	rm -rf build $(TARGET)
