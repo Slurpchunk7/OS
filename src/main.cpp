@@ -8,6 +8,8 @@
 #include "utils/keyboard.h"
 #include "utils/rect.h"
 
+#include "bmp/cursor.h"
+
 #include <stdint.h>
 
 #include <arm_neon.h>
@@ -93,8 +95,9 @@ extern "C" void start() {
 
         // cursor
         for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = 0;
-        rect_t cursor = {mouse_x, mouse_y, 4, 4};
-        draw_rect(backbuffer, cursor, 0xFFFFFFFF);
+
+        draw_image(backbuffer, cursor_t, mouse_x, mouse_y, 32, 32);
+
         flush(fb, backbuffer, WIDTH*HEIGHT);
  
         // for (volatile int i = 0; i < 1000000; i++); 
