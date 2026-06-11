@@ -135,7 +135,7 @@ char font[1024] =
 	0x00, 0x00, 0x60, 0x92, 0x0C, 0x00, 0x00, 0x00,	// Char 126 (~)
 };
 
-void draw_char(uint32_t* fb, char c, uint32_t x, uint32_t y, uint32_t color, uint32_t size)
+void draw_char_bmp(uint32_t* fb, char c, uint32_t x, uint32_t y, uint32_t color, uint32_t size)
 {
     if ((unsigned char)c >= 128 || size == 0)
         return;
@@ -165,7 +165,7 @@ void draw_char(uint32_t* fb, char c, uint32_t x, uint32_t y, uint32_t color, uin
     }
 }
 
-void draw_text(uint32_t* fb, const char* text,
+void draw_text_bmp(uint32_t* fb, const char* text,
                uint32_t x, uint32_t y,
                uint32_t color, uint32_t size)
 {
@@ -185,17 +185,17 @@ void draw_text(uint32_t* fb, const char* text,
             continue;
         }
 
-        draw_char(fb, c, cursor_x, y, color, size);
+        draw_char_bmp(fb, c, cursor_x, y, color, size);
 
         cursor_x += 8 * size; // move one character width
     }
 }
 
 #ifdef __cplusplus
-void draw_text(uint32_t* fb, const String& text,
+void draw_text_bmp(uint32_t* fb, const String& text,
                       uint32_t x, uint32_t y,
                       uint32_t color, uint32_t size)
 {
-    draw_text(fb, text.c_str(), x, y, color, size);
+    draw_text_bmp(fb, text.c_str(), x, y, color, size);
 }
 #endif
