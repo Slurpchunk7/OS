@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 // fixed physical addresses for blk driver state
-#define BLK_BASE        0x44050000UL
+#define BLK_BASE        0x44060000UL
 #define BLK_VRING       (BLK_BASE + 0x0000)  // 0x1000
 #define BLK_BUFFERS     (BLK_BASE + 0x1000)  // request buffers
 #define BLK_STATE       (BLK_BASE + 0x2000)  // blk_t state
