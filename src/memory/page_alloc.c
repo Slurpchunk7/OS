@@ -18,7 +18,7 @@ static void* idx_to_addr(int idx) {
 void page_alloc_init() {
     for (int i = 0; i < PAGE_COUNT / 8; i++) bitmap[i] = 0xFF;
 
-    uintptr_t free_start = 0x44040000UL;
+    uintptr_t free_start = 0x44070000UL;
     uintptr_t free_end   = RAM_BASE + RAM_SIZE;
 
     int start_idx = (free_start - RAM_BASE) / PAGE_SIZE;
