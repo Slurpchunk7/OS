@@ -1,4 +1,5 @@
 #include "ramfb.h"
+#include "utils/mem.h"
 
 #define bool char
 #define true 1
@@ -26,12 +27,6 @@ struct FWCfgFiles {
     uint32_t count;
     struct FWCfgFile files[];
 } __attribute__((packed));
-
-uint64_t strlen(const char* str) {
-    uint64_t i = 0;
-    while (*str++ != '\0') i++;
-    return i;
-}
 
 bool memeq(const char* b1, const char* b2, uint64_t length) {
     for (uint64_t i = 0; i < length; i++) {
