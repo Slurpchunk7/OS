@@ -192,31 +192,60 @@ bool fat32_list(const char* path, fat_entry_t* entries, int max, int* count) {
 }
 
 bool fat32_open(const char* path, fat_entry_t* out) {
-    fat_entry_t entries[64];
-    int count = 0;
-    fat32_list(path, entries, 64, &count);
+    // skip leading slash
+    const char* p = path;
+    if (*p == '/') p++;
 
-    // simple name match, skip leading slash
-    const char* name = path;
-    if (*name == '/') name++;
+    uint32_t cluster = fat.root_cluster;
 
-    for (int i = 0; i < count; i++) {
-        // case-insensitive compare
-        const char* a = entries[i].name;
-        const char* b = name;
-        bool match = true;
-        while (*a && *b) {
-            char ca = *a >= 'a' && *a <= 'z' ? *a - 32 : *a;
-            char cb = *b >= 'a' && *b <= 'z' ? *b - 32 : *b;
-            if (ca != cb) { match = false; break; }
-            a++; b++;
+    while (*p) {
+        // extract next path component
+        char component[256];
+        int len = 0;
+        while (*p && *p != '/') component[len++] = *p++;
+        component[len] = '\0';
+        if (*p == '/') p++; // skip slash
+
+        // search current directory for component
+        fat_entry_t entries[64];
+        int count = read_dir(cluster, entries, 64);
+
+        bool found = false;
+        for (int i = 0; i < count; i++) {
+            const char* a = entries[i].name;
+            const char* b = component;
+            bool match = true;
+            while (*a && *b) {
+                char ca = *a >= 'a' && *a <= 'z' ? *a - 32 : *a;
+                char cb = *b >= 'a' && *b <= 'z' ? *b - 32 : *b;
+                if (ca != cb) { match = false; break; }
+                a++; b++;
+            }
+            if (match && *a == '\0' && *b == '\0') {
+                *out = entries[i];
+                cluster = entries[i].cluster;
+                found = true;
+                break;
+            }
         }
-        if (match && *a == '\0' && *b == '\0') {
-            *out = entries[i];
-            return true;
+
+        if (!found) {
+            uart_puts("fat32_open: not found: ");
+            uart_puts(component);
+            uart_putc('\n');
+            return false;
+        }
+
+        // if more path remains, current entry must be a dir
+        if (*p && !out->is_dir) {
+            uart_puts("fat32_open: not a directory: ");
+            uart_puts(component);
+            uart_putc('\n');
+            return false;
         }
     }
-    return false;
+
+    return true;
 }
 
 bool fat32_read(fat_entry_t* entry, void* buf) {
