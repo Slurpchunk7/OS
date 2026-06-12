@@ -11,14 +11,18 @@
 #include "memory/page_alloc.h"
 #include "memory/heap.h"
 #include "fs/fat32.h"
+#include "desktop/window.h"
+#include "fonts/font.h"
 
-#include "bmp/cursor.h"
+#include "assets/cursor.h"
 
 #include <stdint.h>
 
 #include <arm_neon.h>
 
 #define fb_loc 0x40002800
+
+#define TASKBAR_HEIGHT 50
 
 void flush(uint32_t* dst, uint32_t* src, int count) {
     int i = 0;
@@ -64,30 +68,22 @@ extern "C" void start() {
     // init drive
     fat32_init();
 
-    // list root dir
-    fat_entry_t entries[32];
-    int count = 0;
-    fat32_list("/", entries, 32, &count);
-    print("Root dir: \n");
-    for (int i = 0; i < count; i++) {
-        print(entries[i].is_dir ? " [DIR] " : " [FILE] ");
-        print(entries[i].name);
-        uart_putc('\n');
-    }
-
-    // read file
-    fat_entry_t f;
-    if (fat32_open("/hello.txt", &f)) {
-        char* data = (char*)kmalloc(f.size + 1);
-        fat32_read(&f, data);
-        data[f.size] = '\0';
-        print("hello.txt: ");
-        print(data);
-        uart_putc('\n');
-        kfree(data);
-    }
-
+    font_init("fonts/segoeui.ttf");
+    
     char last = '?';
+
+    window_t win = {
+        .x = 100, .y = 100,
+        .w = 600, .h = 800,
+        .title = "exploring files",
+        .focused = true,
+        .dragging = false,
+        .drag_off_x = 0, .drag_off_y = 0
+    };
+
+    bool mouse_down = false;
+
+    rect_t taskbar_bg = {0, HEIGHT - TASKBAR_HEIGHT, WIDTH, TASKBAR_HEIGHT};
 
     while (1)
     {
@@ -108,6 +104,10 @@ extern "C" void start() {
                 if (ev.code == 0) mouse_x += (int32_t)ev.value;
                 if (ev.code == 1) mouse_y += (int32_t)ev.value;
             }
+            if (ev.type == EV_KEY && ev.code == 272) {
+                if (ev.value == 1) { mouse_down = true;  window_on_mouse_down(&win, mouse_x, mouse_y); }
+                if (ev.value == 0) { mouse_down = false; window_on_mouse_up(&win); }
+            }
         }
         
         if (mouse_x < 0) mouse_x = 0;
@@ -115,13 +115,14 @@ extern "C" void start() {
         if (mouse_y < 0) mouse_y = 0;
         if (mouse_y >= HEIGHT) mouse_y = HEIGHT - 1;
 
+        if (win.dragging) window_on_mouse_move(&win, mouse_x, mouse_y);
+
         // cursor
-        for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = 0;
+        for (int i = 0; i < WIDTH * HEIGHT; i++) backbuffer[i] = 0xFF00AAFF;
 
+        window_draw(backbuffer, &win);
         draw_image(backbuffer, cursor_t, mouse_x, mouse_y, 32, 32);
-
+        
         flush(fb, backbuffer, WIDTH*HEIGHT);
- 
-        // for (volatile int i = 0; i < 1000000; i++); 
     }
 }
