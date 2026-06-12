@@ -55,18 +55,24 @@ void heap_init() {
     uart_putc('\n');
 }
 
+#define LARGE_MAGIC 0xBEEFCAFE
+
+typedef struct {
+    uint32_t magic;
+    uint32_t pages;
+} large_header_t;
+
 void* kmalloc(uint32_t size) {
     if (size == 0) return 0;
-
-    // align to 8 bytes
     size = (size + 7) & ~7u;
 
-    // large allocation: whole pages
     if (size > LARGE_THRESHOLD) {
-        int pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-        void *mem = page_alloc_contiguous(pages);
-        if (!mem) uart_puts("kmalloc: large alloc failed\n");
-        return mem;
+        int pages = (size + sizeof(large_header_t) + PAGE_SIZE - 1) / PAGE_SIZE;
+        large_header_t* hdr = (large_header_t*)page_alloc_contiguous(pages);
+        if (!hdr) { uart_puts("kmalloc: large alloc failed\n"); return 0; }
+        hdr->magic = LARGE_MAGIC;
+        hdr->pages = pages;
+        return (void*)((uint8_t*)hdr + sizeof(large_header_t));
     }
 
     // walk free list
@@ -113,11 +119,19 @@ void* kmalloc(uint32_t size) {
     return kmalloc(size);
 }
 
-void kfree(void *ptr) {
+void kfree(void* ptr) {
     if (!ptr) return;
 
-    block_t *b = (block_t *)((uint8_t *)ptr - HEADER_SIZE);
+    // check if this is a large allocation
+    large_header_t* lhdr = (large_header_t*)((uint8_t*)ptr - sizeof(large_header_t));
+    if (lhdr->magic == LARGE_MAGIC) {
+        lhdr->magic = 0;
+        page_free_contiguous(lhdr, lhdr->pages);
+        return;
+    }
 
+    // normal heap block
+    block_t* b = (block_t*)((uint8_t*)ptr - HEADER_SIZE);
     if (b->magic != MAGIC_USED) {
         uart_puts("kfree: bad magic, double free or corruption at ");
         print_hex((uintptr_t)ptr);
